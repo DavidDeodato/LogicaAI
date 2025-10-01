@@ -29,6 +29,7 @@ export const placeBlockIntent = z.object({
       .enum(["right_of", "left_of", "below", "above", "center", "top", "bottom", "left", "right"]) 
       .optional(),
     referenceElementId: z.string().optional(),
+    referenceText: z.string().optional(),
     gap: z.number().optional(),
     text: z.string().optional(),
   }),
@@ -139,9 +140,14 @@ export function applyActions(actions: unknown): { applied: number; errors: strin
           const page = store.getCurrentPage()
           if (!page) break
           const idx = buildSpatialIndex(page.elements.map((e) => ({ id: e.id, rect: e.rect })))
-          const ref = a.payload.referenceElementId
+          let ref = a.payload.referenceElementId
             ? page.elements.find((e) => e.id === a.payload.referenceElementId)?.rect
             : undefined
+          if (!ref && a.payload.referenceText) {
+            const q = a.payload.referenceText.trim().toLowerCase()
+            const refEl = page.elements.find((e) => (e as any).text?.toLowerCase().includes(q))
+            ref = refEl?.rect
+          }
           const rect = resolveIntent(
             {
               type: a.payload.type,

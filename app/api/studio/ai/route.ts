@@ -78,6 +78,7 @@ export async function POST(req: Request) {
 - delete_page { pageId }
 - add_block { pageId, type: 'text'|'button'|'input'|'box'|'image', text?, rect? }
 - place_block_intent { pageId?, type, size?, anchor?, referenceElementId?, gap?, text? } // preferível para posicionamento relativo
+ - place_block_intent { pageId?, type, size?, anchor?, referenceElementId?, referenceText?, gap?, text? } // preferível para posicionamento relativo; se não souber o id, use referenceText (ex.: "Login")
 - update_block_text { pageId, elementId, text }
 - move_block { pageId, elementId, x, y }
 - resize_block { pageId, elementId, w, h }
