@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useStudioStore } from "@/lib/studio/store"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 export function StudioHeader() {
   const project = useStudioStore((s) => s.project)
@@ -39,6 +40,7 @@ export function StudioHeader() {
           placeholder="Sem título"
         />
         <div className="ml-auto flex items-center gap-2 text-sm">
+          <ThemeToggle />
           <button className="px-3 py-1.5 rounded-md border border-border hover:bg-card">Importar</button>
           <button className="px-3 py-1.5 rounded-md border border-border hover:bg-card">Exportar</button>
           <button onClick={sendToTeam} disabled={sending} className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground rounded">

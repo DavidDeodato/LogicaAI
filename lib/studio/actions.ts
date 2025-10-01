@@ -1,6 +1,7 @@
 import { z } from "zod"
 import { useStudioStore } from "./store"
 import type { ProjectState } from "./types"
+import { buildSpatialIndex, resolveIntent, PlaceIntent } from "./layout"
 
 // Schemas
 export const addPage = z.object({ type: z.literal("add_page"), payload: z.object({ name: z.string().min(1) }) })
@@ -16,6 +17,20 @@ export const addBlock = z.object({
     rect: z
       .object({ x: z.number().optional(), y: z.number().optional(), w: z.number().optional(), h: z.number().optional() })
       .optional(),
+  }),
+})
+export const placeBlockIntent = z.object({
+  type: z.literal("place_block_intent"),
+  payload: z.object({
+    pageId: z.string().optional(),
+    type: z.enum(["text", "button", "input", "box", "image"]),
+    size: z.object({ w: z.number(), h: z.number() }).optional(),
+    anchor: z
+      .enum(["right_of", "left_of", "below", "above", "center", "top", "bottom", "left", "right"]) 
+      .optional(),
+    referenceElementId: z.string().optional(),
+    gap: z.number().optional(),
+    text: z.string().optional(),
   }),
 })
 export const updateBlockText = z.object({
@@ -39,6 +54,7 @@ export const ActionSchema = z.discriminatedUnion("type", [
   renamePage,
   deletePage,
   addBlock,
+  placeBlockIntent,
   updateBlockText,
   moveBlock,
   resizeBlock,
@@ -69,10 +85,9 @@ export function applyActions(actions: unknown): { applied: number; errors: strin
     try {
       switch (a.type) {
         case "add_page": {
-          const before = store.state.pages.length
           store.addPage(a.payload.name)
-          const afterList = store.state.pages
-          const created = afterList[afterList.length - 1]
+          const after = store.state.pages
+          const created = after[after.length - 1]
           alias.set(slug(a.payload.name), created.id)
           store.selectPage(created.id)
           break
@@ -88,7 +103,36 @@ export function applyActions(actions: unknown): { applied: number; errors: strin
           break
         }
         case "delete_page": {
-          // não implementado no MVP
+          break
+        }
+        case "place_block_intent": {
+          const pid = resolvePageId(a.payload.pageId)
+          if (pid) store.selectPage(pid)
+          const page = store.getCurrentPage()
+          if (!page) break
+          const idx = buildSpatialIndex(page.elements.map((e) => ({ id: e.id, rect: e.rect })))
+          const ref = a.payload.referenceElementId
+            ? page.elements.find((e) => e.id === a.payload.referenceElementId)?.rect
+            : undefined
+          const rect = resolveIntent(
+            {
+              type: a.payload.type,
+              size: a.payload.size,
+              anchor: a.payload.anchor,
+              referenceRect: ref,
+              gap: a.payload.gap,
+              pageWidth: 2400, // canvas "infinito"; usamos grande e deixamos o resolver achar slot
+              pageHeight: 2400,
+            },
+            idx,
+          )
+          store.addElement(a.payload.type)
+          const id = store.selection.elementId
+          if (id) {
+            const patch: any = { rect }
+            if (a.payload.text) patch.text = a.payload.text
+            store.updateElement(page.id, id, patch)
+          }
           break
         }
         case "add_block": {
@@ -117,7 +161,6 @@ export function applyActions(actions: unknown): { applied: number; errors: strin
           store.deleteElement(resolvePageId(a.payload.pageId)!, a.payload.elementId)
           break
         case "link_pages":
-          // futuro: refletir visualmente
           break
       }
       applied++
@@ -138,7 +181,6 @@ export function applyActions(actions: unknown): { applied: number; errors: strin
     if (exact) return exact
     const byName = store.getPageByName(idOrName)?.id
     if (byName) return byName
-    // fallback: current page
     return store.getCurrentPage()?.id
   }
 }

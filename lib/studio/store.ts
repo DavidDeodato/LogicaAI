@@ -2,12 +2,13 @@
 
 import { create } from "zustand"
 import { genId } from "./utils"
-import type { ElementType, Page, ProjectState } from "./types"
+import type { ElementType, Page, ProjectState, Element } from "./types"
 
 const now = () => new Date().toISOString()
 
 type Selection = { elementId?: string }
-export type ChatMsg = { role: "user" | "assistant"; content: string; ts: string }
+export type ChatMsgMeta = { usedVision?: boolean; visionDescription?: string }
+export type ChatMsg = { role: "user" | "assistant"; content: string; ts: string; meta?: ChatMsgMeta }
 
 type Store = {
   project: { id: string; name: string }
@@ -24,9 +25,11 @@ type Store = {
   renamePage: (pageId: string, name: string) => void
   selectPage: (pageId: string) => void
   addElement: (type: ElementType) => void
-  updateElement: (pageId: string, elementId: string, patch: Partial<Page["elements"][number]>) => void
+  updateElement: (pageId: string, elementId: string, patch: Partial<Element>) => void
   deleteElement: (pageId: string, elementId: string) => void
-  addChat: (role: ChatMsg["role"], content: string) => void
+  bringForward: (pageId: string, elementId: string) => void
+  sendBackward: (pageId: string, elementId: string) => void
+  addChat: (role: ChatMsg["role"], content: string, meta?: ChatMsgMeta) => void
 }
 
 const initial: ProjectState = {
@@ -112,11 +115,23 @@ export const useStudioStore = create<Store>((set, get) => ({
     const s = get().state
     const page = get().getCurrentPage()
     if (!page) return
-    const el = {
+    const el: Element = {
       id: genId(),
       type,
       rect: { x: 80, y: 80, w: 160, h: 48 },
       text: type === "text" || type === "button" ? (type === "text" ? "Texto" : "Botão") : undefined,
+      style: {
+        backgroundColor: type === "text" ? "transparent" : "#111111",
+        textColor: type === "text" ? "#111111" : "#f5f5f5",
+        borderColor: "#2a2a2a",
+        borderWidth: type === "text" ? 0 : 1,
+        borderRadius: type === "text" ? 0 : 8,
+        fontSize: 14,
+        fontWeight: type === "text" ? 500 : 500,
+        fontFamily: "system-ui, -apple-system, Segoe UI, Arial, sans-serif",
+        opacity: 1,
+        zIndex: 1,
+      },
     }
     const pages = s.pages.map((p) => (p.id === page.id ? { ...p, elements: [...p.elements, el] } : p))
     set({ state: { ...s, pages, updatedAt: now() }, selection: { elementId: el.id } })
@@ -128,7 +143,16 @@ export const useStudioStore = create<Store>((set, get) => ({
       p.id === pageId
         ? {
             ...p,
-            elements: p.elements.map((e) => (e.id === elementId ? { ...e, ...patch, rect: { ...e.rect, ...(patch as any).rect } } : e)),
+            elements: p.elements.map((e) =>
+              e.id === elementId
+                ? {
+                    ...e,
+                    ...patch,
+                    rect: { ...e.rect, ...(patch as any).rect },
+                    style: { ...(e as Element).style, ...(patch as any).style },
+                  }
+                : e,
+            ),
           }
         : p,
     )
@@ -141,8 +165,37 @@ export const useStudioStore = create<Store>((set, get) => ({
     set({ state: { ...s, pages, updatedAt: now() }, selection: {} })
     get().persistToLocalStorage()
   },
-  addChat: (role, content) => {
-    const list = [...get().chat, { role, content, ts: now() }]
+  bringForward: (pageId, elementId) => {
+    const s = get().state
+    const pages = s.pages.map((p) => {
+      if (p.id !== pageId) return p
+      const idx = p.elements.findIndex((e) => e.id === elementId)
+      if (idx === -1 || idx === p.elements.length - 1) return p
+      const arr = [...p.elements]
+      ;[arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]]
+      // Reindex z-index para refletir ordem visual
+      const withZ = arr.map((e, i) => ({ ...e, style: { ...(e as Element).style, zIndex: i + 1 } }))
+      return { ...p, elements: withZ }
+    })
+    set({ state: { ...s, pages, updatedAt: now() } })
+    get().persistToLocalStorage()
+  },
+  sendBackward: (pageId, elementId) => {
+    const s = get().state
+    const pages = s.pages.map((p) => {
+      if (p.id !== pageId) return p
+      const idx = p.elements.findIndex((e) => e.id === elementId)
+      if (idx <= 0) return p
+      const arr = [...p.elements]
+      ;[arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]]
+      const withZ = arr.map((e, i) => ({ ...e, style: { ...(e as Element).style, zIndex: i + 1 } }))
+      return { ...p, elements: withZ }
+    })
+    set({ state: { ...s, pages, updatedAt: now() } })
+    get().persistToLocalStorage()
+  },
+  addChat: (role, content, meta) => {
+    const list = [...get().chat, { role, content, ts: now(), meta }]
     set({ chat: list })
     get().persistToLocalStorage()
   },

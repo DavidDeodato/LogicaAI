@@ -183,7 +183,7 @@ Legenda de prioridade: P0 (crítico), P1 (alto), P2 (médio)
 - Dependências: nenhuma direta do frontend; integrar depois com Task 11.
 - Motivo: Permitir salvar projetos no DB por usuário sem fricção (ver `arquitetura_studio.md`).
 - Passos
-  1. Adicionar Prisma ao projeto (`npx prisma init`), garantir `DATABASE_URL` (já presente no `.env`).
+  1. Adicionar Prisma ao projeto (`npx prisma init`), garantir `DATABASE_URL` (Neon).
   2. Criar models `User` e `Session` conforme `banco_studio.md` e rodar `prisma migrate dev`.
   3. Implementar routes: `POST /api/auth/signup`, `POST /api/auth/login`, `POST /api/auth/logout` (bcrypt + cookie httpOnly via iron‑session ou JWT + cookie).
   4. Guard opcional em `/studio`: se não logado, operar como convidado (localStorage); se logado, habilitar salvar em DB.
@@ -239,6 +239,57 @@ Legenda de prioridade: P0 (crítico), P1 (alto), P2 (médio)
   3. Smoke test em preview: `/studio`, IA, envio para equipe, login, salvar/carregar projeto.
 - Teste/Validação
   - Build sem erros e smoke tests passam.
+
+---
+
+# Progresso recente
+
+- 2025-10-01 — Travado scroll global e layout 100vh
+  - `app/studio/page.tsx`: container raiz com `h-screen` + `overflow-hidden`.
+  - `app/globals.css`: `html, body { height:100%; overflow:hidden; }` para impedir scroll de página.
+  - Coluna do Chat: `min-h-0 flex-1 overflow-auto` — scroll fica interno.
+- 2025-10-01 — Correção do toggle de tema (light/dark)
+  - Movemos a paleta ESCURA para a classe `.dark` e definimos a paleta CLARA em `:root`.
+  - `ThemeProvider` já usa `attribute="class"` e `defaultTheme="dark"`; toggle agora alterna as variáveis corretamente.
+- 2025-10-01 — Pausa das tasks gerais para “passo rápido de UX do Inspector” (motivo: facilitar edição manual antes de seguir com rate-limit/flowmap)
+  - Extensão de tipos: `Element.style` com: `backgroundColor`, `textColor`, `borderColor`, `borderWidth`, `borderRadius`, `fontSize`, `fontWeight`, `fontFamily`, `opacity`, `zIndex`.
+  - Store (`useStudioStore`):
+    - `addElement` agora seta `style` default por tipo.
+    - `updateElement` faz merge de `rect` e `style` sem perder chaves.
+  - Canvas: aplica `style` inline (bg, borda, tipografia, opacidade, z-index). `text` mantém fundo transparente.
+  - Inspector: adicionados controles
+    - Botão “Excluir elemento”.
+    - Cor de fundo (color input + paleta rápida).
+    - Cor do texto.
+    - Borda: largura, cor e raio.
+    - Tipografia: fonte (select), tamanho, peso.
+    - Opacidade (range) e z-index.
+  - Próximos rápidos (se necessário): imagem → URL; sombras; alinhamento de texto; espaçamentos internos.
+- 2025-10-01 — Fix: cor de fundo não aplicava em elementos `text`
+  - Ajuste no `Canvas`: remover forçamento de `transparent` para `text`; agora usa `style.backgroundColor` quando definido.
+- 2025-10-01 — Controles de camadas (z-order)
+  - Store: `bringForward/sendBackward` reordenam `page.elements` e normalizam `style.zIndex` pela ordem.
+  - Inspector: botões “↑ Subir” e “↓ Descer” com disable quando já está no topo/base.
+  - Canvas: respeita `zIndex` via `style` e a própria ordem do array.
+- 2025-10-01 — Plano Visão (feedback visual da página)
+  - Modelo: priorizar `models/gemini-1.5-flash` (rápido e multimodal); alternativa econômica `gemini-1.5-flash-8b`. Manter compatibilidade com `models/gemini-2.5-flash-lite-preview-09-2025` se aceitar imagem.
+  - Captura: usar `html-to-image` para gerar PNG do container do Canvas (largura alvo 1200px, quality ~0.8). Compactar e limitar < 5–8MB.
+  - API: `/api/studio/ai` aceitar `image` opcional (base64 PNG) e incluir em `content` como `inlineData` com `mimeType: image/png` junto do `projectState` + `layout brief`.
+  - Segurança/limites: truncar imagem grande, fallback para só-JSON. Timeout defensivo e logs.
+  - UX: botão “Analisar página (visão)” no ChatPanel ativa captura + envio.
+- 2025-10-01 — Integração Visão Contextual (imagem + JSON)
+  - ChatPanel: botão “Analisar (visão)” captura PNG do `#studio-canvas-root` via `html-to-image` e envia para `/api/studio/ai` com `{ image: { data, mime } }` além de `projectState` e `message`.
+  - API `/api/studio/ai`: aceita `image` opcional e chama Gemini com parts multimodais: texto (instruções + brief + estado JSON + mensagem do usuário) + `inlineData` (imagem). Resposta continua estritamente em JSON (`actions`/`summary`).
+  - Modelo: manter `models/gemini-2.5-flash-lite-preview-09-2025` e fallback documentado para `models/gemini-1.5-flash` caso necessário. Objetivo: rápido e com visão.
+  - Regras de contexto: instruções deixam claro que a imagem dá contexto visual e o JSON dá precisão; pedir sempre resumo curto e ações válidas.
+- 2025-10-01 — UX: Sidebar do chat redimensionável
+  - `app/studio/page.tsx`: adicionado handle vertical (role=separator) para redimensionar largura (min 280, máx 640). Estado local `chatWidth` persiste enquanto sessão.
+  - `ChatPanel`: form com `flex-wrap`, input `min-w-0 flex-1` e botões `shrink-0` para evitar overflow.
+- 2025-10-01 — Elemento “Texto solto”
+  - Defaults do tipo `text`: fundo transparente, sem borda/raio, cor de texto escura, alinhamento à esquerda.
+  - Canvas: para `text` não usamos grid center; renderiza como `<span>` top-left dentro da área, arrastável e redimensionável.
+- 2025-10-01 — Texto inline editável no Canvas
+  - `Canvas`: para elementos `text`, duplo-clique ativa `contentEditable`; drag/resize desativados durante edição. Commit em blur (ou ESC para sair). Nada de caixa de fundo/borda.
 
 ---
 
