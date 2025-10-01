@@ -1,5 +1,5 @@
 export type Rect = { x: number; y: number; w: number; h: number }
-export type ElementType = "text" | "button" | "input" | "box" | "image"
+export type ElementType = "text" | "button" | "input" | "box" | "image" | "shape"
 export type ElementStyle = {
   backgroundColor?: string
   textColor?: string
@@ -11,6 +11,7 @@ export type ElementStyle = {
   fontFamily?: string
   opacity?: number
   zIndex?: number
+  rotateDeg?: number
 }
 export type Element = {
   id: string

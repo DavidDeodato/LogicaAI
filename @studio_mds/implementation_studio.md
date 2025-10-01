@@ -290,6 +290,11 @@ Legenda de prioridade: P0 (crítico), P1 (alto), P2 (médio)
   - Canvas: para `text` não usamos grid center; renderiza como `<span>` top-left dentro da área, arrastável e redimensionável.
 - 2025-10-01 — Texto inline editável no Canvas
   - `Canvas`: para elementos `text`, duplo-clique ativa `contentEditable`; drag/resize desativados durante edição. Commit em blur (ou ESC para sair). Nada de caixa de fundo/borda.
+- 2025-10-01 — Formas básicas (retângulo, elipse, linha, seta)
+  - Tipos: `Element.type = 'shape'` com `props: { kind: 'rect'|'ellipse'|'line'|'arrow', dashed?: boolean, arrow?: boolean }`. Cores/larguras usam `style` existente (`borderColor`, `borderWidth`, `backgroundColor`, `borderRadius`).
+  - Toolbar: botões Retângulo/Elipse/Linha/Seta.
+  - Canvas: rect/ellipse como DIV; line/arrow como SVG `<line>` (marker-end quando `arrow`).
+  - Inspector: seletor de tipo + toggles tracejado/cabeça de seta.
 
 ---
 

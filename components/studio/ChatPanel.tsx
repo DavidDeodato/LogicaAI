@@ -56,27 +56,35 @@ export function ChatPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="min-h-0 flex-1 overflow-auto space-y-2 text-sm pb-2">
-        {chat.map((m, i) => (
-          <div key={i} className={m.role === "assistant" ? "text-muted-foreground" : "text-foreground"}>
-            <span className="font-medium mr-1">{m.role === "assistant" ? "IA:" : "Você:"}</span>
-            {m.content}
-            {m.meta?.usedVision && (
-              <button
-                className="ml-2 inline-flex items-center px-2 py-0.5 text-xs rounded border border-border hover:bg-card"
-                onClick={() => setOpenVisionIdx(openVisionIdx === i ? null : i)}
-                title="Ver descrição visual"
-              >
-                Visão
-              </button>
-            )}
-            {openVisionIdx === i && m.meta?.visionDescription && (
-              <div className="mt-2 p-2 rounded border border-border bg-card whitespace-pre-wrap text-foreground/90">
-                {m.meta.visionDescription}
+      <div className="min-h-0 flex-1 overflow-auto space-y-3 text-sm pb-2">
+        {chat.map((m, i) => {
+          const isAssistant = m.role === "assistant"
+          return (
+            <div key={i} className={`flex ${isAssistant ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[85%] rounded-2xl px-3 py-2 border whitespace-pre-wrap ${
+                isAssistant
+                  ? "bg-primary/15 border-primary"
+                  : "bg-card border-border"
+              }`}>
+                <div className={`${isAssistant ? "text-foreground" : "text-foreground"}`}>{m.content}</div>
+                {m.meta?.usedVision && (
+                  <button
+                    className="mt-2 inline-flex items-center px-2 py-0.5 text-xs rounded border border-border hover:bg-card"
+                    onClick={() => setOpenVisionIdx(openVisionIdx === i ? null : i)}
+                    title="Ver descrição visual"
+                  >
+                    Visão
+                  </button>
+                )}
+                {openVisionIdx === i && m.meta?.visionDescription && (
+                  <div className="mt-2 p-2 rounded border border-border bg-card whitespace-pre-wrap text-foreground/90">
+                    {m.meta.visionDescription}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        ))}
+            </div>
+          )
+        })}
       </div>
       <form onSubmit={onSend} className="mt-2 flex flex-wrap gap-2">
         <button

@@ -18,6 +18,10 @@ function normalizeType(t: string) {
     link_screen: "link_pages",
     link_page: "link_pages",
     place_component_intent: "place_block_intent",
+    update_style: "update_block_style",
+    set_style: "update_block_style",
+    change_style: "update_block_style",
+    change_color: "update_block_style",
   }
   return (map[t] || t) as string
 }
@@ -26,7 +30,24 @@ function buildBrief(state: any) {
   const pages = (state.pages || []).map((p: any) => ({
     id: p.id,
     name: p.name,
-    elements: (p.elements || []).map((e: any) => ({ id: e.id, type: e.type, rect: e.rect })),
+    elements: (p.elements || []).map((e: any) => ({
+      id: e.id,
+      type: e.type,
+      rect: e.rect,
+      props: e.props ? { kind: e.props.kind } : undefined,
+      style: e.style
+        ? {
+            backgroundColor: e.style.backgroundColor,
+            borderColor: e.style.borderColor,
+            borderWidth: e.style.borderWidth,
+            borderRadius: e.style.borderRadius,
+            opacity: e.style.opacity,
+            rotateDeg: e.style.rotateDeg,
+            textColor: e.style.textColor,
+          }
+        : undefined,
+      text: e.text,
+    })),
   }))
   const currentPageId = state.entry || (state.pages && state.pages[0]?.id)
   const currentPageName = (state.pages || []).find((p: any) => p.id === currentPageId)?.name
@@ -61,7 +82,8 @@ export async function POST(req: Request) {
 - move_block { pageId, elementId, x, y }
 - resize_block { pageId, elementId, w, h }
 - delete_block { pageId, elementId }
-- link_pages { fromPageId, toPageId }`
+- link_pages { fromPageId, toPageId }
+- update_block_style { pageId, elementId, style } // style pode conter: backgroundColor|fill, borderColor|stroke, borderWidth|strokeWidth, borderRadius, textColor|color, opacity, fontSize, fontFamily, fontWeight, rotateDeg`
 
     const fewShot = `Exemplos:
 1) {"user":"crie página Login com botão Entrar à direita do título"}
@@ -76,7 +98,7 @@ Use preferencialmente place_block_intent para posicionar elementos sem colisão.
 Se houver dúvida, responda {"actions":[], "ask":"pergunta"}. Não gere HTML/markdown.
 Proibições: não narre processos (ex.: "selecionando página..."). Em vez disso, execute via actions e descreva o resultado no summary.`
 
-    const header = `${system}\n\nContexto: você está ajudando um usuário a construir uma página visual no nosso Studio.\nVocê receberá um snapshot (imagem) do canvas e também um resumo (brief) + o estado JSON do layout.\nA imagem serve para entender hierarquia visual/contraste/espacamentos; o JSON traz detalhes precisos.\nPágina corrente (se aplicável): id=${brief.currentPageId}, name=${brief.currentPageName}.\nSua tarefa:\n1) Gere uma breve descrição visual objetiva da página corrente (vision.description) quando útil.\n2) Se o usuário pedir para selecionar/alterar páginas, faça via actions (ex.: select_page) — não narre a operação.\n3) Planeje mudanças via actions conforme a lista.\n4) Escreva um summary curto e objetivo do resultado, sem narrar passos.\n\nBrief do layout atual (compacto):\n${JSON.stringify(brief)}\n\nEstado completo (referência):\n${JSON.stringify(safeState)}\n\nMensagem do usuário:\n${message}\n\nResponda SOMENTE o JSON.`
+    const header = `${system}\n\nContexto: você está ajudando um usuário a construir uma página visual no nosso Studio.\nVocê receberá um snapshot (imagem) do canvas e também um resumo (brief) + o estado JSON do layout.\nA imagem serve para entender hierarquia visual/contraste/espacamentos; o JSON traz detalhes precisos.\nPágina corrente (se aplicável): id=${brief.currentPageId}, name=${brief.currentPageName}.\nRegras importantes:\n- SEMPRE use elementId exatamente como aparece no brief ao modificar um elemento existente.\n- Para mudar cores/estilos use update_block_style com style (pode usar fill/stroke/strokeWidth, serão normalizados).\n- Não omita elementId nem pageId.\n\nExemplo de mudança de cor: {"type":"update_block_style","payload":{"pageId":"${brief.currentPageId}","elementId":"<id_da_elipse>","style":{"fill":"#0000ff"}}}\n\nBrief do layout atual (compacto):\n${JSON.stringify(brief)}\n\nEstado completo (referência):\n${JSON.stringify(safeState)}\n\nMensagem do usuário:\n${message}\n\nResponda SOMENTE o JSON.`
 
     const parts: any[] = [{ text: header }]
     if (image?.data && image?.mime) {

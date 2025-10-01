@@ -35,6 +35,10 @@ export function Toolbar() {
           <button className="px-2 py-1 rounded-md border border-border text-xs hover:bg-card" onClick={() => addElement("input")}>Input</button>
           <button className="px-2 py-1 rounded-md border border-border text-xs hover:bg-card" onClick={() => addElement("box")}>Caixa</button>
           <button className="px-2 py-1 rounded-md border border-border text-xs hover:bg-card" onClick={() => addElement("image")}>Imagem</button>
+          <button className="px-2 py-1 rounded-md border border-border text-xs hover:bg-card" onClick={() => addElement("shape", { kind: "rect" })}>Retângulo</button>
+          <button className="px-2 py-1 rounded-md border border-border text-xs hover:bg-card" onClick={() => addElement("shape", { kind: "ellipse" })}>Elipse</button>
+          <button className="px-2 py-1 rounded-md border border-border text-xs hover:bg-card" onClick={() => addElement("shape", { kind: "line" })}>Linha</button>
+          <button className="px-2 py-1 rounded-md border border-border text-xs hover:bg-card" onClick={() => addElement("shape", { kind: "arrow" })}>Seta</button>
         </div>
       </div>
     </div>

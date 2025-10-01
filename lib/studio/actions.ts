@@ -47,6 +47,33 @@ export const resizeBlock = z.object({
 })
 export const deleteBlock = z.object({ type: z.literal("delete_block"), payload: z.object({ pageId: z.string(), elementId: z.string() }) })
 export const linkPages = z.object({ type: z.literal("link_pages"), payload: z.object({ fromPageId: z.string(), toPageId: z.string() }) })
+export const updateBlockStyle = z.object({
+  type: z.literal("update_block_style"),
+  payload: z.object({
+    pageId: z.string(),
+    elementId: z.string(),
+    style: z
+      .object({
+        backgroundColor: z.string().optional(),
+        textColor: z.string().optional(),
+        borderColor: z.string().optional(),
+        borderWidth: z.number().optional(),
+        borderRadius: z.number().optional(),
+        fontSize: z.number().optional(),
+        fontWeight: z.number().optional(),
+        fontFamily: z.string().optional(),
+        opacity: z.number().optional(),
+        zIndex: z.number().optional(),
+        rotateDeg: z.number().optional(),
+        // sinônimos comuns que normalizaremos: fill, stroke, strokeWidth, color
+        fill: z.string().optional(),
+        stroke: z.string().optional(),
+        strokeWidth: z.number().optional(),
+        color: z.string().optional(),
+      })
+      .partial(),
+  }),
+})
 
 export const ActionSchema = z.discriminatedUnion("type", [
   addPage,
@@ -60,6 +87,7 @@ export const ActionSchema = z.discriminatedUnion("type", [
   resizeBlock,
   deleteBlock,
   linkPages,
+  updateBlockStyle,
 ])
 
 export type Action = z.infer<typeof ActionSchema>
@@ -162,6 +190,15 @@ export function applyActions(actions: unknown): { applied: number; errors: strin
           break
         case "link_pages":
           break
+        case "update_block_style": {
+          const pid = resolvePageId(a.payload.pageId)!
+          const normalized = normalizeStyle(a.payload.style as any)
+          const curPage = store.state.pages.find((p) => p.id === pid)
+          const curEl = curPage?.elements.find((e) => e.id === a.payload.elementId)
+          const prev = (curEl as any)?.style || {}
+          store.updateElement(pid, a.payload.elementId, { style: { ...prev, ...normalized } as any })
+          break
+        }
       }
       applied++
     } catch (e) {
@@ -183,6 +220,19 @@ export function applyActions(actions: unknown): { applied: number; errors: strin
     if (byName) return byName
     return store.getCurrentPage()?.id
   }
+}
+
+function normalizeStyle(style: Record<string, any>): Record<string, any> {
+  const out: Record<string, any> = { ...style }
+  if (out.fill && !out.backgroundColor) out.backgroundColor = out.fill
+  if (out.stroke && !out.borderColor) out.borderColor = out.stroke
+  if (typeof out.strokeWidth === "number" && out.borderWidth === undefined) out.borderWidth = out.strokeWidth
+  if (out.color && !out.textColor) out.textColor = out.color
+  delete out.fill
+  delete out.stroke
+  delete out.strokeWidth
+  delete out.color
+  return out
 }
 
 export type AiResponse = { actions?: Action[]; summary?: string; ask?: string; error?: string }

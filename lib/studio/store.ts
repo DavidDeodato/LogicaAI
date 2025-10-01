@@ -24,7 +24,7 @@ type Store = {
   addPage: (name?: string) => void
   renamePage: (pageId: string, name: string) => void
   selectPage: (pageId: string) => void
-  addElement: (type: ElementType) => void
+  addElement: (type: ElementType, options?: any) => void
   updateElement: (pageId: string, elementId: string, patch: Partial<Element>) => void
   deleteElement: (pageId: string, elementId: string) => void
   bringForward: (pageId: string, elementId: string) => void
@@ -111,7 +111,7 @@ export const useStudioStore = create<Store>((set, get) => ({
     set({ state: { ...s, entry: pageId, updatedAt: now() } })
     get().persistToLocalStorage()
   },
-  addElement: (type) => {
+  addElement: (type, options) => {
     const s = get().state
     const page = get().getCurrentPage()
     if (!page) return
@@ -132,6 +132,14 @@ export const useStudioStore = create<Store>((set, get) => ({
         opacity: 1,
         zIndex: 1,
       },
+      props: type === "shape" ? { kind: options?.kind || "rect", dashed: false, arrow: false } : undefined,
+    }
+    if (type === "shape") {
+      if (el.props?.kind === "ellipse") el.style.borderRadius = 9999 as unknown as number
+      if (el.props?.kind === "line" || el.props?.kind === "arrow") {
+        el.rect.h = 24
+        el.style.backgroundColor = "transparent"
+      }
     }
     const pages = s.pages.map((p) => (p.id === page.id ? { ...p, elements: [...p.elements, el] } : p))
     set({ state: { ...s, pages, updatedAt: now() }, selection: { elementId: el.id } })

@@ -92,6 +92,45 @@ export function Inspector() {
 
           {/* Estilo */}
           {renderStyleSection(element)}
+
+          <div>
+            <label className="block mb-1">Rotação (°)</label>
+            <input
+              type="number"
+              value={element.style?.rotateDeg ?? 0}
+              onChange={(e) => updateElement(currentPage.id, element.id, { style: { ...(element.style || {}), rotateDeg: Number(e.target.value) } as any })}
+              className="w-full rounded-md border border-border bg-background px-2 py-1"
+            />
+          </div>
+
+          {element.type === "shape" && (
+            <div className="space-y-2">
+              <div className="font-semibold mt-2">Forma</div>
+              <div>
+                <label className="block mb-1">Tipo</label>
+                <select
+                  value={(element as any).props?.kind || "rect"}
+                  onChange={(e) => updateElement(currentPage.id, element.id, { props: { ...(element as any).props, kind: e.target.value } as any })}
+                  className="w-full rounded-md border border-border bg-background px-2 py-1"
+                >
+                  <option value="rect">Retângulo</option>
+                  <option value="ellipse">Elipse</option>
+                  <option value="line">Linha</option>
+                  <option value="arrow">Seta</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="inline-flex items-center gap-2">
+                  <input type="checkbox" checked={!!(element as any).props?.dashed} onChange={(e) => updateElement(currentPage.id, element.id, { props: { ...(element as any).props, dashed: e.target.checked } as any })} />
+                  Tracejado
+                </label>
+                <label className="inline-flex items-center gap-2">
+                  <input type="checkbox" checked={!!(element as any).props?.arrow} onChange={(e) => updateElement(currentPage.id, element.id, { props: { ...(element as any).props, arrow: e.target.checked } as any })} />
+                  Cabeça de seta
+                </label>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="text-muted-foreground">Selecione um elemento no canvas.</div>
@@ -101,6 +140,8 @@ export function Inspector() {
 
   function renderStyleSection(el: Element) {
     const st = el.style || {}
+    const isShape = (el as any).type === "shape"
+    const kind = (el as any).props?.kind
     const palette = ["#111111", "#1f2937", "#374151", "#f59e0b", "#10b981", "#3b82f6", "#ef4444", "#ffffff"]
     const setStyle = (patch: Partial<Element["style"]>) =>
       updateElement(currentPage!.id, el.id, { style: { ...st, ...patch } })
@@ -109,6 +150,7 @@ export function Inspector() {
       <div className="space-y-2">
         <div className="font-semibold mt-2">Estilo</div>
         <div className="grid grid-cols-2 gap-2 items-end">
+          {(!isShape || kind === "rect" || kind === "ellipse") && (
           <div>
             <label className="block mb-1">Cor de fundo</label>
             <div className="flex items-center gap-2">
@@ -130,6 +172,8 @@ export function Inspector() {
               </div>
             </div>
           </div>
+          )}
+          {(!isShape || kind === "rect" || kind === "ellipse") && (
           <div>
             <label className="block mb-1">Cor do texto</label>
             <input
@@ -138,6 +182,7 @@ export function Inspector() {
               onChange={(e) => setStyle({ textColor: e.target.value })}
             />
           </div>
+          )}
           <div>
             <label className="block mb-1">Borda (px)</label>
             <input
@@ -156,6 +201,7 @@ export function Inspector() {
               onChange={(e) => setStyle({ borderColor: e.target.value })}
             />
           </div>
+          {(!isShape || kind === "rect" || kind === "ellipse") && (
           <div>
             <label className="block mb-1">Raio (px)</label>
             <input
@@ -166,6 +212,7 @@ export function Inspector() {
               className="w-full rounded-md border border-border bg-background px-2 py-1"
             />
           </div>
+          )}
           <div>
             <label className="block mb-1">Opacidade</label>
             <input
@@ -179,43 +226,50 @@ export function Inspector() {
           </div>
         </div>
 
-        <div className="font-semibold mt-3">Tipografia</div>
+        {(!isShape || kind === "text") && (
+          <>
+            <div className="font-semibold mt-3">Tipografia</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block mb-1">Fonte</label>
+                <select
+                  value={st.fontFamily || "system-ui, -apple-system, Segoe UI, Arial, sans-serif"}
+                  onChange={(e) => setStyle({ fontFamily: e.target.value })}
+                  className="w-full rounded-md border border-border bg-background px-2 py-1"
+                >
+                  <option value="system-ui, -apple-system, Segoe UI, Arial, sans-serif">Sistema</option>
+                  <option value="Inter, system-ui, -apple-system, Segoe UI, Arial, sans-serif">Inter</option>
+                  <option value="Georgia, serif">Georgia</option>
+                  <option value="Courier New, monospace">Monospace</option>
+                </select>
+              </div>
+              <div>
+                <label className="block mb-1">Tamanho (px)</label>
+                <input
+                  type="number"
+                  min={10}
+                  value={st.fontSize ?? 14}
+                  onChange={(e) => setStyle({ fontSize: Number(e.target.value) })}
+                  className="w-full rounded-md border border-border bg-background px-2 py-1"
+                />
+              </div>
+              <div>
+                <label className="block mb-1">Peso</label>
+                <select
+                  value={(st.fontWeight as any) ?? 500}
+                  onChange={(e) => setStyle({ fontWeight: Number(e.target.value) })}
+                  className="w-full rounded-md border border-border bg-background px-2 py-1"
+                >
+                  {[300, 400, 500, 600, 700, 800].map((w) => (
+                    <option key={w} value={w}>{w}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </>
+        )}
+
         <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="block mb-1">Fonte</label>
-            <select
-              value={st.fontFamily || "system-ui, -apple-system, Segoe UI, Arial, sans-serif"}
-              onChange={(e) => setStyle({ fontFamily: e.target.value })}
-              className="w-full rounded-md border border-border bg-background px-2 py-1"
-            >
-              <option value="system-ui, -apple-system, Segoe UI, Arial, sans-serif">Sistema</option>
-              <option value="Inter, system-ui, -apple-system, Segoe UI, Arial, sans-serif">Inter</option>
-              <option value="Georgia, serif">Georgia</option>
-              <option value="Courier New, monospace">Monospace</option>
-            </select>
-          </div>
-          <div>
-            <label className="block mb-1">Tamanho (px)</label>
-            <input
-              type="number"
-              min={10}
-              value={st.fontSize ?? 14}
-              onChange={(e) => setStyle({ fontSize: Number(e.target.value) })}
-              className="w-full rounded-md border border-border bg-background px-2 py-1"
-            />
-          </div>
-          <div>
-            <label className="block mb-1">Peso</label>
-            <select
-              value={(st.fontWeight as any) ?? 500}
-              onChange={(e) => setStyle({ fontWeight: Number(e.target.value) })}
-              className="w-full rounded-md border border-border bg-background px-2 py-1"
-            >
-              {[300, 400, 500, 600, 700, 800].map((w) => (
-                <option key={w} value={w}>{w}</option>
-              ))}
-            </select>
-          </div>
           <div>
             <label className="block mb-1">Z-index</label>
             <input
