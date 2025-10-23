@@ -1,0 +1,252 @@
+name: Cursor Agent - Intelligent Code Fix
+
+on:
+  repository_dispatch:
+    types: [cycleai_cursor_fix]
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: Prompt para o Cursor Agent
+        required: false
+        default: >-
+          O botão de criar conta da home está quebrado. Investigue o repo e corrija para que ele navegue corretamente para /auth/register.
+      base_branch:
+        description: Branch base para o PR
+        required: false
+        default: main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  agent_fix:
+    runs-on: ubuntu-latest
+    env:
+      CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Verificar secret
+        run: |
+          if [ -z "$CURSOR_API_KEY" ]; then
+            echo "CURSOR_API_KEY não definido em Secrets." >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar Cursor CLI
+        run: |
+          echo "Instalando Cursor CLI..."
+          curl -fsSL https://cursor.com/install | bash
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Rodar Cursor Agent (Intelligent Code Fix)
+        env:
+          PROMPT: ${{ github.event.client_payload.prompt || github.event.inputs.prompt }}
+        run: |
+          echo "🤖 Cursor Agent iniciando..."
+          echo "Prompt: $PROMPT"
+          echo ""
+          
+          # Garantir que o PATH está correto
+          export PATH="$HOME/.local/bin:$PATH"
+          
+          # Rodar o agent em modo não-interativo (--print) com force para aprovar automaticamente
+          echo "Executando Cursor Agent (GPT-5 Codex)..."
+          cursor-agent \
+            --api-key "$CURSOR_API_KEY" \
+            --print \
+            --force \
+            --model gpt-5-codex \
+            "$PROMPT" || true
+          
+          echo ""
+          echo "✅ Cursor Agent finalizou!"
+
+      - name: Criar PR via GitHub API (se houver mudanças)
+        env:
+          BASE_BRANCH: ${{ github.event.client_payload.base || github.event.inputs.base_branch || 'main' }}
+        run: |
+          # Verificar se há mudanças
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Sem mudanças para commitar"
+            exit 0
+          fi
+          
+          # Configurar git
+          git config user.name "cursor-agent[bot]"
+          git config user.email "cursor-agent[bot]@cycle.ai"
+          
+          # Criar script para PR via API
+          cat > create-pr.mjs << 'EOFPR'
+          const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+          const owner = '${{ github.repository_owner }}';
+          const repo = '${{ github.event.repository.name }}';
+          const baseBranch = process.env.BASE_BRANCH || 'main';
+          const branchName = 'cursor/agent-fix-${{ github.run_id }}';
+          
+          async function gh(path, options = {}) {
+            const res = await fetch(`https://api.github.com${path}`, {
+              ...options,
+              headers: {
+                Accept: 'application/vnd.github+json',
+                Authorization: `token ${token}`,
+                'Content-Type': 'application/json',
+                ...(options.headers || {}),
+              },
+            });
+            let body;
+            try { body = await res.json(); } catch { body = await res.text(); }
+            return { ok: res.ok, status: res.status, body };
+          }
+          
+          async function createPR() {
+            // 1. Pegar SHA atual do base branch
+            const head = await gh(`/repos/${owner}/${repo}/git/refs/heads/${baseBranch}`);
+            if (!head.ok) return console.log('ref FAIL', head.status, head.body);
+            const baseSha = head.body.object.sha;
+            
+            // 2. Detectar todos os arquivos modificados
+            const { execSync } = await import('child_process');
+            const statusOutput = execSync('git status --porcelain', { encoding: 'utf8' });
+            const files = statusOutput.split('\n').filter(Boolean).map(line => {
+              const status = line.substring(0, 2).trim();
+              const filePath = line.substring(3).trim();
+              return { status, path: filePath };
+            });
+            
+            if (files.length === 0) {
+              console.log('Nenhuma mudança detectada');
+              return;
+            }
+            
+            console.log(`Arquivos modificados: ${files.length}`);
+            files.forEach(f => console.log(`  ${f.status} ${f.path}`));
+            
+            // 3. Criar blobs para cada arquivo
+            const fs = await import('fs');
+            const treeEntries = [];
+            
+            for (const file of files) {
+              if (file.status === 'D') continue;
+              
+              try {
+                const content = await fs.promises.readFile(file.path, 'utf8');
+                
+                const blob = await gh(`/repos/${owner}/${repo}/git/blobs`, {
+                  method: 'POST',
+                  body: JSON.stringify({ 
+                    content: Buffer.from(content).toString('base64'), 
+                    encoding: 'base64' 
+                  }),
+                });
+                
+                if (!blob.ok) {
+                  console.log(`blob FAIL para ${file.path}:`, blob.status, blob.body);
+                  continue;
+                }
+                
+                treeEntries.push({ 
+                  path: file.path, 
+                  mode: '100644', 
+                  type: 'blob', 
+                  sha: blob.body.sha 
+                });
+              } catch (err) {
+                console.log(`Erro ao ler ${file.path}:`, err.message);
+              }
+            }
+            
+            if (treeEntries.length === 0) {
+              console.log('Nenhum arquivo válido para commitar');
+              return;
+            }
+            
+            // 4. Criar tree
+            const tree = await gh(`/repos/${owner}/${repo}/git/trees`, {
+              method: 'POST',
+              body: JSON.stringify({ 
+                base_tree: baseSha, 
+                tree: treeEntries
+              }),
+            });
+            if (!tree.ok) return console.log('tree FAIL', tree.status, tree.body);
+            
+            // 5. Criar commit
+            const commit = await gh(`/repos/${owner}/${repo}/git/commits`, {
+              method: 'POST',
+              body: JSON.stringify({ 
+                message: 'fix(cursor-agent): automated code fix', 
+                tree: tree.body.sha, 
+                parents: [baseSha] 
+              }),
+            });
+            if (!commit.ok) return console.log('commit FAIL', commit.status, commit.body);
+            
+            // 6. Criar/atualizar branch
+            const ref = await gh(`/repos/${owner}/${repo}/git/refs`, {
+              method: 'POST',
+              body: JSON.stringify({ ref: `refs/heads/${branchName}`, sha: commit.body.sha }),
+            });
+            if (!ref.ok) {
+              const update = await gh(`/repos/${owner}/${repo}/git/refs/heads/${branchName}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ sha: commit.body.sha, force: true }),
+              });
+              if (!update.ok) return console.log('ref update FAIL', update.status, update.body);
+            }
+            
+            // 7. Gerar descrição automática da PR
+            const filesSummary = files.map(f => {
+              const emoji = f.status === 'M' ? '📝' : f.status === 'A' ? '✨' : f.status === 'D' ? '🗑️' : '🔧';
+              const action = f.status === 'M' ? 'modified' : f.status === 'A' ? 'added' : f.status === 'D' ? 'deleted' : 'changed';
+              return `${emoji} \`${f.path}\` (${action})`;
+            }).join('\n');
+            
+            const prDescription = `## 🤖 PR criado automaticamente pelo Cursor Agent (Claude AI)
+
+### 📦 Mudanças aplicadas de forma inteligente baseadas no prompt
+
+${filesSummary}
+
+---
+
+**Prompt original:**
+\`\`\`
+${process.env.PROMPT || 'N/A'}
+\`\`\`
+
+**Total de arquivos modificados:** ${files.length}
+
+---
+*Mudanças aplicadas de forma pontual e estruturada.*`;
+            
+            // 8. Criar PR
+            const pr = await gh(`/repos/${owner}/${repo}/pulls`, {
+              method: 'POST',
+              body: JSON.stringify({ 
+                title: 'fix(cursor-agent): automated intelligent code fix', 
+                head: branchName, 
+                base: baseBranch, 
+                body: prDescription
+              }),
+            });
+            console.log('PR:', pr.status, pr.ok ? 'OK' : 'FAIL');
+            if (!pr.ok) console.log(pr.body);
+            if (pr.ok) console.log('✅ PR criado:', pr.body.html_url);
+          }
+          
+          await createPR();
+          EOFPR
+          
+          node create-pr.mjs
